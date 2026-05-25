@@ -82,7 +82,7 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         env:
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PATH: /home/ubuntu/AI Research Assistant (Agentic RAG System)
           REPO_URL: https://github.com/${{ github.repository }}.git
         with:
           host: ${{ secrets.DEPLOY_HOST }}

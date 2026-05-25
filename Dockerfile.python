@@ -1,0 +1,28 @@
+# Dockerfile.python
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install CPU-only PyTorch FIRST (avoids downloading 2.5GB of NVIDIA CUDA)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# Copy requirements and install (torch already satisfied, skips CUDA)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Ensure temp directory exists
+RUN mkdir -p temp_uploads
+
+# Expose port
+EXPOSE 8000
+
+# Start application
+CMD ["python", "rag_api.py"]

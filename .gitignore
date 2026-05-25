@@ -1,0 +1,51 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.egg
+
+# Node
+node_modules/
+dist/
+
+# Environment & Secrets
+.env
+.env.local
+.env.production
+
+# Database
+users.db
+*.db
+
+# Uploads & Data
+temp_uploads/
+uploads/
+faiss_db/
+test_docs/
+
+# Deployment scripts with hardcoded credentials
+deploy_to_server.py
+scratch/
+
+# Logs
+logs.txt
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker data (not code)
+deployment/faiss_db/
+deployment/temp_uploads/
+deployment/pgdata/
+deployment/data/

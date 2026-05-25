@@ -1,0 +1,37 @@
+# Dockerfile.node
+
+# Stage 1: Build the Client
+FROM node:20-slim AS client-builder
+WORKDIR /app/client
+COPY client/package*.json ./
+RUN npm install
+COPY client/ ./
+RUN npm run build
+
+# Stage 2: Build the Server
+FROM node:20-slim AS server-builder
+WORKDIR /app/server
+COPY server/package*.json ./
+RUN npm install
+COPY server/ ./
+RUN npm run build
+
+# Final Stage
+FROM node:20-slim
+WORKDIR /app/server
+
+# Copy production dependencies for server
+COPY server/package*.json ./
+RUN npm install --omit=dev
+
+# Copy built server from server-builder
+COPY --from=server-builder /app/server/dist ./dist
+# Copy built client from client-builder
+COPY --from=client-builder /app/client/dist ./client/dist
+
+# Ensure necessary directories exist
+RUN mkdir -p data uploads
+
+EXPOSE 5000
+
+CMD ["node", "dist/index.js"]

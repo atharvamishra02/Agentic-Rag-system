@@ -1,0 +1,43 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to agenticrag.online
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            echo "=== Deploying Agentic RAG System ==="
+
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            # Pull latest code
+            echo "Pulling latest code..."
+            git pull origin main
+
+            # Rebuild and restart containers
+            echo "Rebuilding Docker containers..."
+            docker compose -p agentic-rag -f deployment/docker-compose.yml build --no-cache
+            docker compose -p agentic-rag -f deployment/docker-compose.yml up -d --force-recreate
+
+            # Wait for services to start
+            echo "Waiting for services to start..."
+            sleep 10
+
+            # Health check
+            echo "Running health check..."
+            curl -f http://localhost:5001/health || echo "WARNING: Health check failed"
+
+            echo "=== Deployment complete! ==="

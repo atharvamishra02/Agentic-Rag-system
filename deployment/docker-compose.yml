@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # Service 1: Python RAG Engine
+  # Responsible for PDF processing, FAISS vector search, and LangGraph agent logic.
+  rag-engine:
+    build: 
+      context: ..
+      dockerfile: Dockerfile.python
+    ports:
+      - "8001:8000" # Maps Host Port 8001 to Container Port 8000
+    volumes:
+      - ./faiss_db:/app/faiss_db       # Persistent storage for Vector Database
+      - ./temp_uploads:/app/temp_uploads # Persistent storage for uploaded files
+    env_file:
+      - ../.env                        # Loads API keys (OpenAI, Tavily, etc.)
+    restart: always
+
+  # Service 2: PostgreSQL Database
+  # Stores user credentials, session info, and metadata.
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agenticrag
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    restart: always
+
+  # Service 3: Node.js Backend
+  # Responsible for User Interface (Client), Session Management, and API Orchestration.
+  backend:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile.node
+    ports:
+      - "5001:5000" # Maps Host Port 5001 to Container Port 5000
+    environment:
+      - PORT=5000
+      - PYTHON_API_URL=http://rag-engine:8000 # Internal Docker DNS communication
+      - APP_ORIGIN=https://agenticrag.online
+      - SERVER_PUBLIC_URL=https://agenticrag.online
+    env_file:
+      - ../.env
+    volumes:
+      - ./data:/app/data # Persistent storage for user data
+    depends_on:
+      - rag-engine # Ensures Python engine starts before the backend
+      - db         # Ensures PostgreSQL database starts before the backend
+    restart: always

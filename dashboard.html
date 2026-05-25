@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autonomous Agentic RAG | Cognition Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
+        .glow { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+        .reasoning-step { border-left: 2px solid #3b82f6; padding-left: 1rem; margin-bottom: 1rem; opacity: 0; transform: translateY(10px); animation: fadeInUp 0.5s forwards; }
+        @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="min-h-screen p-8">
+    <div class="max-w-5xl mx-auto">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-12">
+            <div>
+                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500">
+                    Cognition Dashboard
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">Autonomous Agentic RAG v1.0.0</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div id="status-indicator" class="flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-slate-800 border border-slate-700">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span> ENGINE READY
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left: Query Input -->
+            <div class="lg:col-span-1 space-y-6">
+                <div class="glass p-6 rounded-2xl glow">
+                    <label class="block text-sm font-semibold mb-3 text-blue-300 uppercase tracking-wider">Execute Query</label>
+                    <textarea id="query-input" rows="4" 
+                        class="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        placeholder="Enter complex query..."></textarea>
+                    <button id="submit-btn" class="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all flex justify-center items-center gap-2">
+                        <span>INITIATE REASONING</span>
+                    </button>
+                </div>
+
+                <div class="glass p-6 rounded-2xl">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Verification Metrics</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Grounding Score</span><span id="grounding-val">0%</span></div>
+                            <div class="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden"><div id="grounding-bar" class="h-full bg-blue-500 transition-all duration-1000" style="width: 0%"></div></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Hallucination Risk</span><span id="hallucination-val">0%</span></div>
+                            <div class="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden"><div id="hallucination-bar" class="h-full bg-red-500 transition-all duration-1000" style="width: 0%"></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Reasoning Trace -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="glass p-8 rounded-2xl min-h-[500px] flex flex-col">
+                    <h3 class="text-sm font-bold text-blue-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        Execution Trace
+                    </h3>
+                    
+                    <div id="trace-container" class="flex-grow space-y-4 font-mono text-sm overflow-y-auto max-h-[600px] pr-2">
+                        <div class="text-slate-500 italic">Waiting for query initiation...</div>
+                    </div>
+
+                    <div id="final-output-container" class="hidden mt-8 p-6 bg-blue-900/20 border border-blue-500/30 rounded-xl">
+                        <h4 class="text-blue-300 font-bold mb-2 flex items-center gap-2 text-xs">
+                            <span class="w-2 h-2 bg-blue-500 rounded-full pulse"></span> VERIFIED RESPONSE
+                        </h4>
+                        <p id="final-output" class="text-slate-200 leading-relaxed"></p>
+                        <div id="citations" class="mt-4 flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const btn = document.getElementById('submit-btn');
+        const input = document.getElementById('query-input');
+        const trace = document.getElementById('trace-container');
+        const outputContainer = document.getElementById('final-output-container');
+        const output = document.getElementById('final-output');
+
+        async function submitQuery() {
+            const query = input.value;
+            if (!query) return;
+
+            // Reset UI
+            trace.innerHTML = '<div class="reasoning-step">Initializing Agentic Graph...</div>';
+            outputContainer.classList.add('hidden');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="pulse">PROCESSING...</span>';
+
+            try {
+                // Mocking trace steps for visualization (In production, this would use graph.astream)
+                setTimeout(() => addTraceStep("Planner: Decomposing query into 3 sub-tasks..."), 800);
+                setTimeout(() => addTraceStep("Retriever: Executing Hybrid Search in Qdrant..."), 1500);
+                setTimeout(() => addTraceStep("Verifier: Analyzing 4 documents for grounding..."), 2500);
+
+                const response = await fetch('http://127.0.0.1:8000/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+
+                const data = await response.json();
+
+                addTraceStep("Synthesizer: Generating grounded response with citations...");
+                
+                setTimeout(() => {
+                    outputContainer.classList.remove('hidden');
+                    output.innerText = data.response;
+                    document.getElementById('grounding-val').innerText = (data.confidence * 100).toFixed(0) + '%';
+                    document.getElementById('grounding-bar').style.width = (data.confidence * 100) + '%';
+                    
+                    btn.disabled = false;
+                    btn.innerHTML = '<span>INITIATE REASONING</span>';
+                }, 1000);
+
+            } catch (err) {
+                addTraceStep("❌ Error: Failed to connect to engine. Ensure main.py is running.");
+                btn.disabled = false;
+                btn.innerHTML = '<span>INITIATE REASONING</span>';
+            }
+        }
+
+        function addTraceStep(text) {
+            const div = document.createElement('div');
+            div.className = 'reasoning-step text-slate-300';
+            div.innerText = `> ${text}`;
+            trace.appendChild(div);
+            trace.scrollTop = trace.scrollHeight;
+        }
+
+        btn.addEventListener('click', submitQuery);
+    </script>
+</body>
+</html>

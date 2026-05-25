@@ -12,20 +12,40 @@ jobs:
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          REPO_URL: https://github.com/${{ github.repository }}.git
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          script_stop: true
+          envs: DEPLOY_PATH,REPO_URL
           script: |
-            set -e
+            set -Eeuo pipefail
             echo "=== Deploying Agentic RAG System ==="
 
-            cd ${{ secrets.DEPLOY_PATH }}
+            if [ -z "$DEPLOY_PATH" ]; then
+              echo "DEPLOY_PATH secret is empty."
+              exit 1
+            fi
+
+            if [ ! -d "$DEPLOY_PATH/.git" ]; then
+              if [ -d "$DEPLOY_PATH" ] && [ "$(find "$DEPLOY_PATH" -mindepth 1 -maxdepth 1 | wc -l)" -gt 0 ]; then
+                echo "DEPLOY_PATH exists but is not a Git repository: $DEPLOY_PATH"
+                echo "Set DEPLOY_PATH to the existing repo checkout, or move/empty this directory so it can be cloned."
+                exit 1
+              fi
+
+              echo "Cloning repository into $DEPLOY_PATH..."
+              mkdir -p "$DEPLOY_PATH"
+              git clone "$REPO_URL" "$DEPLOY_PATH"
+            fi
+
+            cd "$DEPLOY_PATH"
 
             # Pull latest code
             echo "Pulling latest code..."
-            git pull origin main
+            git pull --ff-only origin main
 
             # Rebuild and restart containers
             echo "Rebuilding Docker containers..."

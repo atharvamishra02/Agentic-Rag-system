@@ -116,9 +116,14 @@ jobs:
             echo "Pulling latest code..."
             git pull --ff-only origin main
 
-            # Rebuild and restart containers
+            # Clean up disk space before build
+            echo "Cleaning up disk space..."
+            docker system prune -f --volumes || true
+            docker image prune -f -a || true
+
+            # Rebuild and restart containers (use cache where possible)
             echo "Rebuilding Docker containers..."
-            docker compose -p agentic-rag -f deployment/docker-compose.yml build --no-cache
+            docker compose -p agentic-rag -f deployment/docker-compose.yml build
             docker compose -p agentic-rag -f deployment/docker-compose.yml up -d --force-recreate
 
             # Wait for services to start

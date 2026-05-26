@@ -27,6 +27,8 @@ Live site: https://agenticrag.online
 
 ## Architecture
 
+For a deeper senior-developer walkthrough, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 Production traffic flows like this:
 
 ```text

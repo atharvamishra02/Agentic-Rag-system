@@ -8,7 +8,7 @@ WORKDIR /app
 # Install build dependencies in one layer and clean immediately
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        build-essential \
+    build-essential \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Install CPU-only PyTorch (avoids downloading 2.5GB of NVIDIA CUDA)

@@ -116,6 +116,28 @@ jobs:
             echo "Pulling latest code..."
             git pull --ff-only origin main
 
+            # Check if .env file exists, if not create from example
+            if [ ! -f ".env" ]; then
+              echo "⚠️  WARNING: .env file not found!"
+              if [ -f ".env.example" ]; then
+                echo "Creating .env from .env.example template..."
+                cp .env.example .env
+                echo "✓ .env file created. Please update the following in the .env file:"
+                echo "  - GOOGLE_API_KEY (required)"
+                echo "  - GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (for Google OAuth)"
+                echo "  - GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET (for GitHub OAuth)"
+                echo "  - DATABASE_URL (if using custom PostgreSQL)"
+                echo ""
+                echo "Update .env, then re-run the deployment or manually restart containers:"
+                echo "  cd '$DEPLOY_PATH' && docker compose -p agentic-rag -f deployment/docker-compose.yml up -d --force-recreate"
+                echo ""
+                exit 1
+              else
+                echo "ERROR: Neither .env nor .env.example found"
+                exit 1
+              fi
+            fi
+
             # Enable Docker BuildKit for better layer caching and performance
             export DOCKER_BUILDKIT=1
             export COMPOSE_DOCKER_CLI_BUILD=1

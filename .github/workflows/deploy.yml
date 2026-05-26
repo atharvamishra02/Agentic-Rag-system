@@ -116,22 +116,63 @@ jobs:
             echo "Pulling latest code..."
             git pull --ff-only origin main
 
-            # Clean up disk space before build
+            # Enable Docker BuildKit for better layer caching and performance
+            export DOCKER_BUILDKIT=1
+            export COMPOSE_DOCKER_CLI_BUILD=1
+
+            # Aggressive disk cleanup
             echo "Cleaning up disk space..."
             docker system prune -f --volumes || true
             docker image prune -f -a || true
+            docker builder prune -f -a || true
+            
+            # Optional: Find and remove large files in old containers/volumes
+            df -h
+            echo "Free space after cleanup:"
 
-            # Rebuild and restart containers (use cache where possible)
-            echo "Rebuilding Docker containers..."
-            docker compose -p agentic-rag -f deployment/docker-compose.yml build
+            # Rebuild and restart containers with retries
+            echo "Rebuilding Docker containers (with retry)..."
+            RETRY_COUNT=0
+            MAX_RETRIES=2
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              if docker compose -p agentic-rag -f deployment/docker-compose.yml build --progress=plain; then
+                echo "Docker build succeeded"
+                break
+              else
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                  echo "Build failed, retry $RETRY_COUNT/$MAX_RETRIES after cleanup..."
+                  docker system prune -f --volumes || true
+                  docker builder prune -f -a || true
+                  sleep 5
+                else
+                  echo "Build failed after $MAX_RETRIES retries"
+                  exit 1
+                fi
+              fi
+            done
+
+            # Bring up containers
+            echo "Starting containers..."
             docker compose -p agentic-rag -f deployment/docker-compose.yml up -d --force-recreate
 
             # Wait for services to start
             echo "Waiting for services to start..."
-            sleep 10
+            sleep 15
 
-            # Health check
+            # Health check with retries
             echo "Running health check..."
-            curl -f http://localhost:5001/health || echo "WARNING: Health check failed"
+            for i in {1..5}; do
+              if curl -f http://localhost:5001/health 2>/dev/null; then
+                echo "Health check passed!"
+                break
+              elif [ $i -lt 5 ]; then
+                echo "Health check attempt $i/5 failed, retrying..."
+                sleep 2
+              else
+                echo "WARNING: Health check failed after 5 attempts"
+              fi
+            done
 
             echo "=== Deployment complete! ==="

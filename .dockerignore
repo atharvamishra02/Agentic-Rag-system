@@ -1,11 +1,75 @@
+# Virtual environments and Python caches
 .venv
+venv
 __pycache__
 *.pyc
+*.pyo
+*.egg-info
+dist
+build
+.pytest_cache
+
+# Git files
 .git
 .gitignore
+.gitattributes
+
+# Node modules (rebuilt in containers)
 server/node_modules
 client/node_modules
+npm-debug.log*
+yarn-debug.log
+yarn-error.log
+
+# Built client/server (rebuilt in containers)
 client/dist
 server/dist
+*/build
+
+# Runtime files (temp, uploads, databases)
 temp_uploads
 uploads
+faiss_db/index.faiss
+*.db
+
+# IDE and editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env.local
+.env.*.local
+
+# Logs
+logs
+*.log
+
+# Testing
+coverage
+.nyc_output
+.coverage
+
+# Documentation
+README.md
+ARCHITECTURE.md
+*.md
+
+# CI/CD and deployment
+.github
+deployment/
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Development only
+test_docs/
+inspect_db.py
+test_*.py

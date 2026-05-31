@@ -70,10 +70,10 @@ jobs:
           python-version: "3.11"
 
       - name: Syntax check
-        run: python -m compileall -q agents api core observability server *.py
+        run: python -m compileall -q agents core memory *.py
 
   deploy:
-    name: Deploy to agenticrag.online
+    name: Deploy to Server
     runs-on: ubuntu-latest
     needs: [frontend, backend, python]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -82,12 +82,13 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         env:
-          DEPLOY_PATH: /home/ubuntu/AI Research Assistant (Agentic RAG System)
+          DEPLOY_PATH: /root/agentic-rag-system
           REPO_URL: https://github.com/${{ github.repository }}.git
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
           envs: DEPLOY_PATH,REPO_URL
           script: |
             set -Eeuo pipefail
@@ -114,7 +115,8 @@ jobs:
 
             # Pull latest code
             echo "Pulling latest code..."
-            git pull --ff-only origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             # Check if .env file exists, if not create from example
             if [ ! -f ".env" ]; then
@@ -179,6 +181,19 @@ jobs:
             echo "Starting containers..."
             docker compose -p agentic-rag -f deployment/docker-compose.yml up -d --force-recreate
 
+            # Configure and reload Nginx
+            echo "Configuring Nginx..."
+            if [ -f "deployment/nginx-agentic-rag.conf" ]; then
+              cp deployment/nginx-agentic-rag.conf /etc/nginx/sites-available/agentic-rag
+              ln -sf /etc/nginx/sites-available/agentic-rag /etc/nginx/sites-enabled/agentic-rag
+              # Test Nginx and reload if valid, otherwise do not break the script if nginx isn't running/configured yet
+              if command -v nginx >/dev/null 2>&1; then
+                nginx -t && systemctl reload nginx || echo "Nginx test/reload failed, please check configuration manually."
+              else
+                echo "Nginx command not found. Please install Nginx on the server."
+              fi
+            fi
+
             # Wait for services to start
             echo "Waiting for services to start..."
             sleep 15
@@ -197,4 +212,4 @@ jobs:
               fi
             done
 
-            echo "=== Deployment complete! ==="
+            echo "=== Deployment complete! ==="! ==="

@@ -13,7 +13,7 @@ This directory contains the configuration files and documentation for deploying 
 
 ### Deployment Folder Files
 - **`deployment/docker-compose.yml`**: A production-specific version of the docker-compose configuration. It maps internal service ports to external ports (e.g., `8001` and `5001`) and sets up persistent volumes for the FAISS database and uploads.
-- **`deployment/nginx-agentic-rag.conf`**: The Nginx configuration file. It acts as a reverse proxy, routing incoming traffic from port `8081` to the appropriate internal services (Backend or RAG Engine).
+- **`deployment/nginx-agentic-rag.conf`**: The Nginx configuration file. It acts as a reverse proxy, routing incoming traffic from port `80` to the appropriate internal services (Backend or RAG Engine).
 - **`deployment/ARCHITECTURE.md`**: Detailed overview of the system's structural design and data flow.
 - **`deployment/QUESTION_FLOW.md`**: Step-by-step journey of a user's question through the system.
 - **`deployment/COMMANDS.md`**: A quick-reference list of all terminal commands used for deployment.
@@ -24,9 +24,9 @@ This directory contains the configuration files and documentation for deploying 
 1. **Environment Setup**: Ensure `.env` is configured with necessary API keys (OpenAI, Tavily, etc.).
 2. **Build and Start**:
    ```bash
-   docker-compose -f deployment/docker-compose.yml up --build -d
+   docker compose -p agentic-rag -f deployment/docker-compose.yml up --build -d
    ```
 3. **Nginx Configuration**:
    - Copy `nginx-agentic-rag.conf` to `/etc/nginx/sites-available/`.
-   - Link to `sites-enabled`.
-   - Restart Nginx: `sudo systemctl restart nginx`.
+   - Link to `sites-enabled`: `sudo ln -sf /etc/nginx/sites-available/agentic-rag /etc/nginx/sites-enabled/`
+   - Reload Nginx: `sudo systemctl reload nginx`.

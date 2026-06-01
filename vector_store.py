@@ -3,20 +3,57 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_experimental.text_splitter import SemanticChunker
 
+_embeddings_instance = None
+
+def get_embeddings():
+    global _embeddings_instance
+    if _embeddings_instance is None:
+        print("\n[Embeddings] Initializing all-MiniLM-L6-v2 HuggingFace model...")
+        _embeddings_instance = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    return _embeddings_instance
+
 def get_text_chunks(documents, thread_id=None, file_url=None, user_id=None):
     """
     Splits the loaded documents using Semantic Chunking (Industry Level).
     This breaks text based on meaning shifts rather than fixed character counts.
+    Falls back to RecursiveCharacterTextSplitter if it fails or if the document is too large
+    to prevent memory/CPU OOM crashes in resource-constrained environments.
     """
-    print(f"\n[Step 2] Semantic Chunking {len(documents)} document pages...")
+    print(f"\n[Step 2] Chunking {len(documents)} document pages...")
     
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    text_splitter = SemanticChunker(
-        embeddings, 
-        breakpoint_threshold_type="percentile" 
-    )
+    chunks = []
+    use_semantic = True
     
-    chunks = text_splitter.split_documents(documents)
+    # If the document has a large number of pages, force Recursive splitting to avoid OOM
+    if len(documents) > 15:
+        print(f"   [Chunker] Document has {len(documents)} pages. Using Recursive splitter to prevent OOM crash.")
+        use_semantic = False
+        
+    if use_semantic:
+        try:
+            embeddings = get_embeddings()
+            text_splitter = SemanticChunker(
+                embeddings, 
+                breakpoint_threshold_type="percentile" 
+            )
+            chunks = text_splitter.split_documents(documents)
+            print(f"   [Chunker] Successfully split into {len(chunks)} chunks using Semantic Chunker.")
+        except Exception as e:
+            print(f"   [Chunker Warning] Semantic chunking failed ({e}). Falling back to RecursiveCharacterTextSplitter.")
+            use_semantic = False
+            
+    if not use_semantic:
+        try:
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
+        except ImportError:
+            from langchain.text_splitter import RecursiveCharacterTextSplitter
+            
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200
+        )
+        chunks = text_splitter.split_documents(documents)
+        print(f"   [Chunker] Successfully split into {len(chunks)} chunks using Recursive Chunker.")
     
     # Inject metadata for all chunks if provided
     for chunk in chunks:
@@ -35,7 +72,7 @@ def create_vector_store(chunks, db_path="faiss_db"):
     Creates a new FAISS vector store. (Overwrites if exists)
     """
     print("\n[Step 3] Creating new vector database...")
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = get_embeddings()
     vector_store = FAISS.from_documents(chunks, embeddings)
     vector_store.save_local(db_path)
     print(f"Vector database saved to: {db_path}")
@@ -50,7 +87,7 @@ def update_vector_store(chunks, db_path="faiss_db"):
         print("[Update] No chunks to add. Skipping.")
         return None
 
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = get_embeddings()
     
     # Check if the database files actually exist inside the directory
     index_file = os.path.join(db_path, "index.faiss")
@@ -96,7 +133,7 @@ def load_vector_store(db_path="faiss_db"):
         # We return None instead of throwing an error, so the chat engine can gracefully say "no documents"
         return None
     
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = get_embeddings()
     
     # allow_dangerous_deserialization is required for loading local FAISS files
     return FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
@@ -112,7 +149,7 @@ def clear_user_data(user_id, db_path="faiss_db"):
     if not os.path.exists(index_file):
         return True
 
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = get_embeddings()
     vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
     
     # FAISS doesn't have a direct delete_by_metadata, so we filter the docstore

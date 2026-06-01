@@ -212,4 +212,4 @@ jobs:
               fi
             done
 
-            echo "=== Deployment complete! ==="! ==="
+            echo "=== Deployment complete! ==="

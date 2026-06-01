@@ -11,8 +11,8 @@ RUN apt-get update \
     build-essential \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Install CPU-only PyTorch (avoids downloading 2.5GB of NVIDIA CUDA)
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Install CPU-only PyTorch and compatible NumPy (prevents SIMD baseline optimizations crash)
+RUN pip install --no-cache-dir torch numpy==1.26.4 --index-url https://download.pytorch.org/whl/cpu
 
 # Copy and install Python requirements
 COPY requirements.txt .

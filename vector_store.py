@@ -44,7 +44,7 @@ def get_text_chunks(documents, thread_id=None, file_url=None, user_id=None):
             
     if not use_semantic:
         from langchain.text_splitter import RecursiveCharacterTextSplitter
-            
+
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200

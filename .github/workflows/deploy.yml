@@ -126,7 +126,7 @@ jobs:
                 echo "Creating .env from .env.example template..."
                 cp .env.example .env
                 echo "✓ .env file created. Please update the following in the .env file:"
-                echo "  - GOOGLE_API_KEY (required)"
+                echo "  - OPENAI_API_KEY (required)"
                 echo "  - GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (for Google OAuth)"
                 echo "  - GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET (for GitHub OAuth)"
                 echo "  - DATABASE_URL (if using custom PostgreSQL)"

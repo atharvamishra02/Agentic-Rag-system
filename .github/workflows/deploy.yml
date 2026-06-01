@@ -89,6 +89,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
+          timeout: 40m
           envs: DEPLOY_PATH,REPO_URL
           script: |
             set -Eeuo pipefail
@@ -144,11 +145,10 @@ jobs:
             export DOCKER_BUILDKIT=1
             export COMPOSE_DOCKER_CLI_BUILD=1
 
-            # Aggressive disk cleanup
-            echo "Cleaning up disk space..."
-            docker system prune -f --volumes || true
-            docker image prune -f -a || true
-            docker builder prune -f -a || true
+            # Clean up only stopped containers and dangling images to preserve build cache on the new server
+            echo "Cleaning up dangling docker resources..."
+            docker system prune -f || true
+            docker image prune -f || true
             
             # Optional: Find and remove large files in old containers/volumes
             df -h

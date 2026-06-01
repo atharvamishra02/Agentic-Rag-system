@@ -68,10 +68,14 @@ async def upload_file(file: UploadFile = File(...), thread_id: str = Form(None))
             shutil.copyfileobj(file.file, buffer)
             
         # 2. Upload to Cloudinary for production storage
-        print(f"[Cloudinary] Uploading {file.filename}...")
-        upload_result = cloudinary.uploader.upload(file_path, resource_type="raw")
-        cloudinary_file_url = upload_result.get("secure_url")
-        print(f"[Cloudinary] Success! URL: {cloudinary_file_url}")
+        cloudinary_file_url = None
+        try:
+            print(f"[Cloudinary] Uploading {file.filename}...")
+            upload_result = cloudinary.uploader.upload(file_path, resource_type="raw")
+            cloudinary_file_url = upload_result.get("secure_url")
+            print(f"[Cloudinary] Success! URL: {cloudinary_file_url}")
+        except Exception as cloud_err:
+            print(f"[Cloudinary Warning] Upload failed, proceeding without Cloudinary URL: {cloud_err}")
 
         # 3. Process with existing RAG logic
         docs = load_document(file_path)

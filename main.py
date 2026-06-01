@@ -244,8 +244,12 @@ async def upload_endpoint(file: UploadFile = File(...), threadId: str = Form(Non
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        upload_result = cloudinary.uploader.upload(file_path, resource_type="raw")
-        cloudinary_file_url = upload_result.get("secure_url")
+        cloudinary_file_url = None
+        try:
+            upload_result = cloudinary.uploader.upload(file_path, resource_type="raw")
+            cloudinary_file_url = upload_result.get("secure_url")
+        except Exception as cloud_err:
+            print(f"[Cloudinary Warning] Upload failed, proceeding without Cloudinary URL: {cloud_err}")
 
         docs = load_document(file_path)
         chunks = get_text_chunks(docs, thread_id=threadId, file_url=cloudinary_file_url, user_id=user_id)

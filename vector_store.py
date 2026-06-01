@@ -43,10 +43,7 @@ def get_text_chunks(documents, thread_id=None, file_url=None, user_id=None):
             use_semantic = False
             
     if not use_semantic:
-        try:
-            from langchain_text_splitters import RecursiveCharacterTextSplitter
-        except ImportError:
-            from langchain.text_splitter import RecursiveCharacterTextSplitter
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
             
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,

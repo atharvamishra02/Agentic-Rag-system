@@ -90,28 +90,32 @@ def update_vector_store(chunks, db_path="faiss_db"):
     index_file = os.path.join(db_path, "index.faiss")
     
     if os.path.exists(index_file):
-        print(f"\n[Update] Loading existing database from {db_path}...")
-        vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
-        
-        # Session-aware deduplication: Check if this source is already indexed FOR THIS SESSION
-        first_chunk_metadata = chunks[0].metadata if chunks else {}
-        new_source = os.path.basename(first_chunk_metadata.get("source", ""))
-        current_thread_id = first_chunk_metadata.get("thread_id")
-        
-        already_indexed = False
-        if hasattr(vector_store, 'docstore') and hasattr(vector_store.docstore, '_dict'):
-            for doc_id in vector_store.docstore._dict:
-                m = vector_store.docstore._dict[doc_id].metadata
-                if os.path.basename(m.get("source", "")) == new_source and m.get("thread_id") == current_thread_id:
-                    already_indexed = True
-                    break
-        
-        if already_indexed:
-            print(f"   ! Source '{new_source}' already indexed for this session. Skipping.")
-            return vector_store
+        try:
+            print(f"\n[Update] Loading existing database from {db_path}...")
+            vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
             
-        print(f"   -> Adding {len(chunks)} new chunks for session '{current_thread_id or 'Global'}'...")
-        vector_store.add_documents(chunks)
+            # Session-aware deduplication: Check if this source is already indexed FOR THIS SESSION
+            first_chunk_metadata = chunks[0].metadata if chunks else {}
+            new_source = os.path.basename(first_chunk_metadata.get("source", ""))
+            current_thread_id = first_chunk_metadata.get("thread_id")
+            
+            already_indexed = False
+            if hasattr(vector_store, 'docstore') and hasattr(vector_store.docstore, '_dict'):
+                for doc_id in vector_store.docstore._dict:
+                    m = vector_store.docstore._dict[doc_id].metadata
+                    if os.path.basename(m.get("source", "")) == new_source and m.get("thread_id") == current_thread_id:
+                        already_indexed = True
+                        break
+            
+            if already_indexed:
+                print(f"   ! Source '{new_source}' already indexed for this session. Skipping.")
+                return vector_store
+                
+            print(f"   -> Adding {len(chunks)} new chunks for session '{current_thread_id or 'Global'}'...")
+            vector_store.add_documents(chunks)
+        except Exception as load_err:
+            print(f"   [Update Warning] Failed to load existing FAISS database ({load_err}). Recreating database to self-heal.")
+            vector_store = FAISS.from_documents(chunks, embeddings)
     else:
         print(f"\n[Initialization] Creating new database with {len(chunks)} chunks...")
         vector_store = FAISS.from_documents(chunks, embeddings)
@@ -130,10 +134,13 @@ def load_vector_store(db_path="faiss_db"):
         # We return None instead of throwing an error, so the chat engine can gracefully say "no documents"
         return None
     
-    embeddings = get_embeddings()
-    
-    # allow_dangerous_deserialization is required for loading local FAISS files
-    return FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
+    try:
+        embeddings = get_embeddings()
+        # allow_dangerous_deserialization is required for loading local FAISS files
+        return FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
+    except Exception as e:
+        print(f"[Error] Failed to load local vector store: {e}. Returning None.")
+        return None
 
 def clear_user_data(user_id, db_path="faiss_db"):
     """
@@ -146,29 +153,33 @@ def clear_user_data(user_id, db_path="faiss_db"):
     if not os.path.exists(index_file):
         return True
 
-    embeddings = get_embeddings()
-    vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
-    
-    # FAISS doesn't have a direct delete_by_metadata, so we filter the docstore
-    if hasattr(vector_store, 'docstore') and hasattr(vector_store.docstore, '_dict'):
-        ids_to_keep = []
-        for doc_id, doc in vector_store.docstore._dict.items():
-            if doc.metadata.get("user_id") != user_id:
-                ids_to_keep.append(doc_id)
+    try:
+        embeddings = get_embeddings()
+        vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
         
-        # This is a bit hacky for FAISS local, usually one would recreate or use a different VS
-        # But for this implementation, we can filter the docstore and re-save if needed
-        # However, a cleaner way is to just filter and save a new index
-        all_docs = [vector_store.docstore._dict[did] for did in ids_to_keep]
-        if not all_docs:
-            if os.path.exists(db_path):
-                import shutil
-                shutil.rmtree(db_path)
-            return True
+        # FAISS doesn't have a direct delete_by_metadata, so we filter the docstore
+        if hasattr(vector_store, 'docstore') and hasattr(vector_store.docstore, '_dict'):
+            ids_to_keep = []
+            for doc_id, doc in vector_store.docstore._dict.items():
+                if doc.metadata.get("user_id") != user_id:
+                    ids_to_keep.append(doc_id)
             
-        new_vs = FAISS.from_documents(all_docs, embeddings)
-        new_vs.save_local(db_path)
-        return True
+            # This is a bit hacky for FAISS local, usually one would recreate or use a different VS
+            # But for this implementation, we can filter the docstore and re-save if needed
+            # However, a cleaner way is to just filter and save a new index
+            all_docs = [vector_store.docstore._dict[did] for did in ids_to_keep]
+            if not all_docs:
+                if os.path.exists(db_path):
+                    import shutil
+                    shutil.rmtree(db_path)
+                return True
+                
+            new_vs = FAISS.from_documents(all_docs, embeddings)
+            new_vs.save_local(db_path)
+            return True
+    except Exception as e:
+        print(f"[Error] Failed to clear user data: {e}")
+        return False
     return False
 
 if __name__ == "__main__":

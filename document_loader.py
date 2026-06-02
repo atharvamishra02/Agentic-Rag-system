@@ -23,12 +23,25 @@ def load_document(file_path: str):
         # Use PyPDFLoader to extract text from PDF files
         loader = PyPDFLoader(file_path)
         documents = loader.load()
-    elif ext in ['.txt', '.md']:
-        # Use TextLoader for plain text or markdown files
-        loader = TextLoader(file_path, encoding='utf-8')
+    elif ext == '.docx':
+        # Use Docx2txtLoader to extract text from Word documents
+        from langchain_community.document_loaders import Docx2txtLoader
+        loader = Docx2txtLoader(file_path)
         documents = loader.load()
+    elif ext in ['.txt', '.md']:
+        # Use TextLoader for plain text or markdown files with fallback encoding
+        try:
+            loader = TextLoader(file_path, encoding='utf-8')
+            documents = loader.load()
+        except Exception:
+            try:
+                print(f"   [Loader Warning] UTF-8 decoding failed for {file_path}. Falling back to latin-1 encoding.")
+                loader = TextLoader(file_path, encoding='latin-1')
+                documents = loader.load()
+            except Exception as e:
+                raise ValueError(f"Failed to load text file: {e}")
     else:
-        raise ValueError(f"Unsupported file format: {ext}. Only PDF and Text files are supported in this phase.")
+        raise ValueError(f"Unsupported file format: {ext}. Only PDF, Word (.docx), and Text/Markdown files are supported in this phase.")
         
     print(f"Successfully loaded {len(documents)} page(s)/section(s) from {file_path}")
     return documents

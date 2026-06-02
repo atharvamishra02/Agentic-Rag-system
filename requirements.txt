@@ -21,3 +21,4 @@ psycopg2-binary
 aiokafka
 asyncio
 jsonref
+docx2txt

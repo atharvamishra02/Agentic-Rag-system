@@ -8,8 +8,16 @@ _embeddings_instance = None
 def get_embeddings():
     global _embeddings_instance
     if _embeddings_instance is None:
-        print("\n[Embeddings] Initializing all-MiniLM-L6-v2 HuggingFace model...")
-        _embeddings_instance = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        openai_key = os.getenv("OPENAI_API_KEY")
+        disable_openai = os.getenv("DISABLE_OPENAI_EMBEDDINGS", "false").lower() == "true"
+        
+        if openai_key and not disable_openai:
+            print("\n[Embeddings] Initializing OpenAIEmbeddings (text-embedding-3-small) to prevent VPS OOM...")
+            from langchain_openai import OpenAIEmbeddings
+            _embeddings_instance = OpenAIEmbeddings(model="text-embedding-3-small")
+        else:
+            print("\n[Embeddings] Initializing all-MiniLM-L6-v2 HuggingFace model...")
+            _embeddings_instance = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     return _embeddings_instance
 
 def get_text_chunks(documents, thread_id=None, file_url=None, user_id=None):

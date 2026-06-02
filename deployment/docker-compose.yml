@@ -15,6 +15,14 @@ services:
     env_file:
       - ../.env                        # Loads API keys (OpenAI, Tavily, etc.)
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2048M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
 
   # Service 2: PostgreSQL Database
   # Stores user credentials, session info, and metadata.
@@ -27,6 +35,14 @@ services:
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   # Service 3: Node.js Backend
   # Responsible for User Interface (Client), Session Management, and API Orchestration.
@@ -49,3 +65,11 @@ services:
       - rag-engine # Ensures Python engine starts before the backend
       - db         # Ensures PostgreSQL database starts before the backend
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M

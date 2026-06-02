@@ -33,6 +33,13 @@ COPY . .
 # Ensure temp directory exists
 RUN mkdir -p temp_uploads
 
+# Set thread count environment variables to optimize CPU and RAM usage
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+ENV OPENBLAS_NUM_THREADS=1
+ENV VECLIB_MAXIMUM_THREADS=1
+ENV NUMEXPR_NUM_THREADS=1
+
 # Expose port
 EXPOSE 8000
 

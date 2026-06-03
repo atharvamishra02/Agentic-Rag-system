@@ -55,8 +55,6 @@ services:
     environment:
       - PORT=5000
       - PYTHON_API_URL=http://rag-engine:8000 # Internal Docker DNS communication
-      - APP_ORIGIN=${APP_ORIGIN:-http://localhost}
-      - SERVER_PUBLIC_URL=${SERVER_PUBLIC_URL:-http://localhost}
     env_file:
       - ../.env
     volumes:

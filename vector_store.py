@@ -1,7 +1,27 @@
 import os
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_experimental.text_splitter import SemanticChunker
+import pickle
+from langchain_core.vectorstores import InMemoryVectorStore
+
+class InMemoryVectorStoreWithDictFilter(InMemoryVectorStore):
+    def _convert_filter(self, filter_dict):
+        if not filter_dict:
+            return None
+        if callable(filter_dict):
+            return filter_dict
+        # If it is a dictionary, convert it to a lambda function
+        return lambda doc: all(doc.metadata.get(k) == v for k, v in filter_dict.items())
+
+    def similarity_search_with_score_by_vector(self, embedding, k=4, filter=None, **kwargs):
+        filter_func = self._convert_filter(filter)
+        return super().similarity_search_with_score_by_vector(embedding, k=k, filter=filter_func, **kwargs)
+
+    def max_marginal_relevance_search_by_vector(self, embedding, k=4, fetch_k=20, lambda_mult=0.5, filter=None, **kwargs):
+        filter_func = self._convert_filter(filter)
+        return super().max_marginal_relevance_search_by_vector(embedding, k=k, fetch_k=fetch_k, lambda_mult=lambda_mult, filter=filter_func, **kwargs)
+
+    def similarity_search(self, query, k=4, filter=None, **kwargs):
+        filter_func = self._convert_filter(filter)
+        return super().similarity_search(query, k=k, filter=filter_func, **kwargs)
 
 _embeddings_instance = None
 
@@ -17,6 +37,7 @@ def get_embeddings():
             _embeddings_instance = OpenAIEmbeddings(model="text-embedding-3-small")
         else:
             print("\n[Embeddings] Initializing all-MiniLM-L6-v2 HuggingFace model...")
+            from langchain_huggingface import HuggingFaceEmbeddings
             _embeddings_instance = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     return _embeddings_instance
 
@@ -40,6 +61,7 @@ def get_text_chunks(documents, thread_id=None, file_url=None, user_id=None):
     if use_semantic:
         try:
             embeddings = get_embeddings()
+            from langchain_experimental.text_splitter import SemanticChunker
             text_splitter = SemanticChunker(
                 embeddings, 
                 breakpoint_threshold_type="percentile" 
@@ -74,18 +96,28 @@ def get_text_chunks(documents, thread_id=None, file_url=None, user_id=None):
 
 def create_vector_store(chunks, db_path="faiss_db"):
     """
-    Creates a new FAISS vector store. (Overwrites if exists)
+    Creates a new vector store. (Overwrites if exists)
     """
     print("\n[Step 3] Creating new vector database...")
     embeddings = get_embeddings()
-    vector_store = FAISS.from_documents(chunks, embeddings)
-    vector_store.save_local(db_path)
+    vector_store = InMemoryVectorStoreWithDictFilter.from_documents(chunks, embeddings)
+    
+    os.makedirs(db_path, exist_ok=True)
+    pkl_file = os.path.join(db_path, "index.pkl")
+    with open(pkl_file, "wb") as f:
+        pickle.dump(vector_store.store, f)
+    
+    # Write a dummy index.faiss file for compatibility checks
+    index_file = os.path.join(db_path, "index.faiss")
+    with open(index_file, "w") as f:
+        f.write("in-memory-compatibility-file")
+        
     print(f"Vector database saved to: {db_path}")
     return vector_store
 
 def update_vector_store(chunks, db_path="faiss_db"):
     """
-    Adds new chunks to an existing FAISS vector store.
+    Adds new chunks to an existing vector store.
     If no store exists, it creates one.
     """
     if not chunks:
@@ -93,14 +125,16 @@ def update_vector_store(chunks, db_path="faiss_db"):
         return None
 
     embeddings = get_embeddings()
-    
-    # Check if the database files actually exist inside the directory
     index_file = os.path.join(db_path, "index.faiss")
+    pkl_file = os.path.join(db_path, "index.pkl")
     
-    if os.path.exists(index_file):
+    if os.path.exists(index_file) and os.path.exists(pkl_file):
         try:
             print(f"\n[Update] Loading existing database from {db_path}...")
-            vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
+            with open(pkl_file, "rb") as f:
+                store_dict = pickle.load(f)
+            vector_store = InMemoryVectorStoreWithDictFilter(embeddings)
+            vector_store.store = store_dict
             
             # Session-aware deduplication: Check if this source is already indexed FOR THIS SESSION
             first_chunk_metadata = chunks[0].metadata if chunks else {}
@@ -108,12 +142,11 @@ def update_vector_store(chunks, db_path="faiss_db"):
             current_thread_id = first_chunk_metadata.get("thread_id")
             
             already_indexed = False
-            if hasattr(vector_store, 'docstore') and hasattr(vector_store.docstore, '_dict'):
-                for doc_id in vector_store.docstore._dict:
-                    m = vector_store.docstore._dict[doc_id].metadata
-                    if os.path.basename(m.get("source", "")) == new_source and m.get("thread_id") == current_thread_id:
-                        already_indexed = True
-                        break
+            for doc_id, doc in vector_store.store.items():
+                m = doc.metadata
+                if os.path.basename(m.get("source", "")) == new_source and m.get("thread_id") == current_thread_id:
+                    already_indexed = True
+                    break
             
             if already_indexed:
                 print(f"   ! Source '{new_source}' already indexed for this session. Skipping.")
@@ -122,30 +155,38 @@ def update_vector_store(chunks, db_path="faiss_db"):
             print(f"   -> Adding {len(chunks)} new chunks for session '{current_thread_id or 'Global'}'...")
             vector_store.add_documents(chunks)
         except Exception as load_err:
-            print(f"   [Update Warning] Failed to load existing FAISS database ({load_err}). Recreating database to self-heal.")
-            vector_store = FAISS.from_documents(chunks, embeddings)
+            print(f"   [Update Warning] Failed to load existing database ({load_err}). Recreating database to self-heal.")
+            vector_store = InMemoryVectorStoreWithDictFilter.from_documents(chunks, embeddings)
     else:
         print(f"\n[Initialization] Creating new database with {len(chunks)} chunks...")
-        vector_store = FAISS.from_documents(chunks, embeddings)
+        vector_store = InMemoryVectorStoreWithDictFilter.from_documents(chunks, embeddings)
     
-    # Save back to disk
-    vector_store.save_local(db_path)
+    os.makedirs(db_path, exist_ok=True)
+    with open(pkl_file, "wb") as f:
+        pickle.dump(vector_store.store, f)
+        
+    with open(index_file, "w") as f:
+        f.write("in-memory-compatibility-file")
+        
     print(f"Vector database updated at: {db_path}")
     return vector_store
 
 def load_vector_store(db_path="faiss_db"):
     """
-    Loads an existing FAISS vector store.
+    Loads an existing vector store.
     """
     index_file = os.path.join(db_path, "index.faiss")
-    if not os.path.exists(index_file):
-        # We return None instead of throwing an error, so the chat engine can gracefully say "no documents"
+    pkl_file = os.path.join(db_path, "index.pkl")
+    if not os.path.exists(index_file) or not os.path.exists(pkl_file):
         return None
     
     try:
         embeddings = get_embeddings()
-        # allow_dangerous_deserialization is required for loading local FAISS files
-        return FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
+        with open(pkl_file, "rb") as f:
+            store_dict = pickle.load(f)
+        vector_store = InMemoryVectorStoreWithDictFilter(embeddings)
+        vector_store.store = store_dict
+        return vector_store
     except Exception as e:
         print(f"[Error] Failed to load local vector store: {e}. Returning None.")
         return None
@@ -158,45 +199,31 @@ def clear_user_data(user_id, db_path="faiss_db"):
         return False
         
     index_file = os.path.join(db_path, "index.faiss")
-    if not os.path.exists(index_file):
+    pkl_file = os.path.join(db_path, "index.pkl")
+    if not os.path.exists(index_file) or not os.path.exists(pkl_file):
         return True
 
     try:
         embeddings = get_embeddings()
-        vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
-        
-        # FAISS doesn't have a direct delete_by_metadata, so we filter the docstore
-        if hasattr(vector_store, 'docstore') and hasattr(vector_store.docstore, '_dict'):
-            ids_to_keep = []
-            for doc_id, doc in vector_store.docstore._dict.items():
-                if doc.metadata.get("user_id") != user_id:
-                    ids_to_keep.append(doc_id)
+        with open(pkl_file, "rb") as f:
+            store_dict = pickle.load(f)
             
-            # This is a bit hacky for FAISS local, usually one would recreate or use a different VS
-            # But for this implementation, we can filter the docstore and re-save if needed
-            # However, a cleaner way is to just filter and save a new index
-            all_docs = [vector_store.docstore._dict[did] for did in ids_to_keep]
-            if not all_docs:
-                if os.path.exists(db_path):
-                    import shutil
-                    shutil.rmtree(db_path)
-                return True
+        ids_to_keep = []
+        for doc_id, doc in store_dict.items():
+            if doc.metadata.get("user_id") != user_id:
+                ids_to_keep.append(doc_id)
                 
-            new_vs = FAISS.from_documents(all_docs, embeddings)
-            new_vs.save_local(db_path)
+        if not ids_to_keep:
+            if os.path.exists(db_path):
+                import shutil
+                shutil.rmtree(db_path)
             return True
+            
+        new_store = {did: store_dict[did] for did in ids_to_keep}
+        
+        with open(pkl_file, "wb") as f:
+            pickle.dump(new_store, f)
+        return True
     except Exception as e:
         print(f"[Error] Failed to clear user data: {e}")
         return False
-    return False
-
-if __name__ == "__main__":
-    # Test block
-    from document_loader import load_document
-    
-    test_file = "test_docs/cricket_guide.pdf"
-    if os.path.exists(test_file):
-        docs = load_document(test_file)
-        chunks = get_text_chunks(docs)
-        create_vector_store(chunks)
-        print("\n[SUCCESS] Vector store test complete.")

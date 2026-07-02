@@ -51,7 +51,7 @@ services:
       context: ..
       dockerfile: server/Dockerfile.node
     ports:
-      - "127.0.0.1:5001:5000" # Maps Host Port 5001 (localhost only) to Container Port 5000
+      - "127.0.0.1:5002:5000" # Maps Host Port 5001 (localhost only) to Container Port 5000
     environment:
       - PORT=5000
       - PYTHON_API_URL=http://rag-engine:8000 # Internal Docker DNS communication

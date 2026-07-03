@@ -200,7 +200,7 @@ jobs:
             # Health check with retries
             echo "Running health check..."
             for i in {1..5}; do
-              if curl -f http://localhost:5001/health 2>/dev/null; then
+              if curl -f http://localhost:5002/health 2>/dev/null; then
                 echo "Health check passed!"
                 break
               elif [ $i -lt 5 ]; then
